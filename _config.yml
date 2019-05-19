@@ -1,7 +1,7 @@
 # Site settings
 title: 芭蕉不解的博客
 SEOTitle: 芭蕉不解的博客 | BAJIAObujie Blog
-header-img: img/post-bg-desk.jpg
+header-img: img/Heaven's_Feel.png
 email: 876407883@qq.com
 description: "言之命至，心随己愿。不忘初心，方得始终。"
 keyword: "Life, BAJIAObujie Blog"
@@ -12,7 +12,7 @@ github_repo: "https://github.com/BAJIAObujie/BAJIAObujie.github.io.git" # you co
 # Sidebar settings
 sidebar: true                           # whether or not using Sidebar.
 sidebar-about-description: "If a great wave should fall."
-sidebar-avatar: /img/about-BY-gentle.jpg      # use absolute URL, seeing it's used in both `/` and `/about/`
+sidebar-avatar: /img/Caren_Head.jpg      # use absolute URL, seeing it's used in both `/` and `/about/`
 
 
 
