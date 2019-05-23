@@ -201,7 +201,7 @@ Import中也利用同样的三个值ObjectName、ClassName、ClassPackage，计�
 
 加载ExportMap自身数据的部分可以分成两个主要部分，**一是根据CDO类默认对象生成一个模板，二修改差异性的数据。**
 
-**一、塑造模板的过程如下：*
+**一、塑造模板的过程如下：**
 
 1. 获得Export.Object的Archetype
 
