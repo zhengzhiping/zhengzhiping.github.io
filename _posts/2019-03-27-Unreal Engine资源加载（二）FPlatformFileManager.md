@@ -4,7 +4,7 @@
 
 ​        这是关于资源加载的第二篇内容，前一篇内容讲了，从StaticLoadObject出发，是如何把自身的数据以及依赖对象的数据给加载到内存中的，这一篇内容将继续讲文件读取的相关内容。
 
-##如何读取pak中的文件
+## 责任链设计模式
 
 ​        在进入主题之前必须先了解一下UE4为了文件读取所采用的设计模式，责任链设计模式。这是网上找的一篇讲解 [http://www.cnblogs.com/java-my-life/archive/2012/05/28/2516865.html](http://www.cnblogs.com/java-my-life/archive/2012/05/28/2516865.html)
 
@@ -44,6 +44,7 @@ https://zhuanlan.zhihu.com/p/35925797
 
 ```c++
 FPlatformFileManager 
+
 /** Currently used platform file. */
 class IPlatformFile* TopmostPlatformFile; //类里的唯一变量
 
