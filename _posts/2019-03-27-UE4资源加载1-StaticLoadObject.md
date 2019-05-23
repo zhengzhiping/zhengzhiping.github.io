@@ -30,91 +30,71 @@
 
 ​        可以把ImportTable看做是这个资源所依赖的其他资源的列表，ExportTable就是这个资源本身的列表。Unity导出资源的时候是导出AssetBundle + 依赖表。每个资源所依赖的其他资源都记录在依赖表中 。这里的uasset可以看做是AssetBundle + 依赖表中这个资源的依赖文件记录。其中AssetBundle就是对应的ExportTable以及ExportObject的内容，依赖表中这个资源的依赖文件记录就是对应的ImportTable。
 
-**FLinkerLoad**
+#### FLinkerLoad
 
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/2.jpg" width="400px" />
 
 
 
-FlinkerLoad是作为uasset和内存UPackage的中间桥梁。
+FlinkerLoad是作为uasset和内存UPackage的中间桥梁。在加载内容生成UPackage的时候，UPackage会根据名字找到uasset文件。主要内容如下：
 
-FArchive* Loader; 负责读取具体文件
+* FArchive* Loader; //Loader负责读取具体文件
 
-TArray<FObjectImport> ImportMap; 导入表，需要依赖（导入）的UObject的TArray
+* TArray<FObjectImport> ImportMap; //将uasset的ImportTable加载到ImportMap中，FObjectImport是需要依赖（导入）的UObject
 
-TArray<FObjectExport> ExportMap; 导出表，这个UPackage所有的UObject（这些UObject都能提供给其他UPackage作为Import）
+* TArray<FObjectExport> ExportMap; //FObjectExport是这个UPackage所拥有的UObject（这些UObject都能提供给其他UPackage作为Import）
 
-（ImportMap和ExportMap是从uasset的FileSummary中读取来的，这样就知道这个资源依赖于哪些资源，本身又有哪些资源）
+**加载内容的时候主要经过了以下四个步骤**：
 
+1. 根据文件名字创建一个空的包（没有任何文件相关的数据）
 
+2. 建立一个LinkerLoad去加载对应的uasset文件 序列化。
 
-**加载资源四个步骤**
+3. 优先加载ImportMap
 
-1、根据文件名字创建一个空的包（没有任何文件相关的数据）
+4. 加载ExportMap（本身的数据）
 
-2、建立一个LinkerLoad去加载对应的uasset文件 序列化。
+对应图中右边的四个步骤
 
-3、加载ImportMap（依赖的UObject）
-
-4、加载ExportMap（本身的数据）
-
-
-
-<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/3.jpg" width="300px" />
+<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/3.jpg" width="800px" />
 
 
 
-序列化uasset阶段中会序列化还原这个资源所需要的信息，例如ImportMap、ExportMap
+序列化uasset阶段中会序列化还原这个资源所需要的信息，例如ImportMap、ExportMap，但这两个Map中存储的信息仅仅是Import和Export的信息而已，可以理解为是知道了去加载的途径，但是还没有去加载。随后在VerifyImportInner才会实际上地把Import内容加载进内存，（LoadAllObject + EndLoad）把自身资源的数据加载到内存。
 
-ImportMap中存储了依赖的UObject，ExportMap存储了包自身存储的UObject，
+##### 一、建立一个UPackage
 
+​        从StaticLoadObject方法即可推出
 
+##### 二、序列化uasset
 
-三个重要步骤：序列化uasset、加载外部依赖的UObject，加载本身的数据。
+在FLinkerLoad的Tick函数中，会把uasset的信息给加载出来。
 
+`FLinkerLoad::ELinkerStatus FLinkerLoad::Tick( float InTimeLimit, bool bInUseTimeLimit, bool bInUseFullTimeLimit )`
 
+1. 读取文件 CreateLoader  
 
-**一、序列化uasset** 
+2. 序列化FileSummary，SerializePackageFileSummary 
 
+   FPackageFileSummary 主要存储 比如FolderName基本字段以及uasset其余信息在文件中的偏移信息，比如ExportOffset、ExportCount。
 
+3. 序列化uasset其他信息（除FileSummary、ExportObject）比如：    SerializeImportMap、SerializeExportMap。
 
-FLinkerLoad::ELinkerStatus FLinkerLoad::Tick( float InTimeLimit, bool bInUseTimeLimit, bool bInUseFullTimeLimit )
+4. 生成必要信息，这些信息不需要序列化到uasset，可以通过其余序列化信息恢复生成 CreateExportHash
 
+5. FinalizeCreation  创建LinkerLoad的最后步骤，verify 加载外部依赖UObject
 
+Verify的步骤就已经到了第三个步骤加载ImportMap的内容，在这之前必须先了解ExportMap和ImportMap的概念
 
-1、读取文件
-
-CreateLoader  
-
-2、序列化FileSummary，SerializePackageFileSummary 
-
-FPackageFileSummary 主要存储 比如FolderName基本字段以及uasset其余信息在文件中的偏移信息，比如ExportOffset、ExportCount。
-
-3、序列化uasset其他信息（除FileSummary、ExportObject）比如：    SerializeImportMap、SerializeExportMap。
-
-4、生成必要信息，这些信息不需要序列化到uasset，可以通过其余序列化信息恢复生成                  CreateExportHash
-
-5、FinalizeCreation  创建LinkerLoad的最后步骤，verify 加载外部依赖UObject
-
-Verify之前必须先了解ExportMap和ImportMap的概念
+<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/4.jpg" width="250px" />
 
 
 
-
-
-<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/4.jpg" width="300px" />
-
-
-
-**二、加载ImportMap（依赖的UObject）** 
+##### 三、加载ImportMap（依赖的UObject）
 
 
 
-<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/5.jpg" width="300px" />
-
-
-
-ImportMap就是存储FObjectImport的数组
+<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/5.jpg"/>
 
 
 
@@ -124,7 +104,7 @@ FLinkerLoad::VerifyImportInner主要分为两种情况，Asset实际资产和非
 
 
 
-<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/6.jpg" width="300px" />
+<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/6.jpg"/>
 
 
 
@@ -134,11 +114,11 @@ FLinkerLoad::VerifyImportInner主要分为两种情况，Asset实际资产和非
 
 
 
-<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/7.jpg" width="300px" />
+<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/7.jpg"/>
 
  2、Import是一个UObject，那必定是Class对象（类似Java Class对象），找到TopLevelPackage，在TopLevelPackage找到这个Class对象。
 
-<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/8.jpg" width="300px" />
+<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/8.jpg"/>
 
 （比如加载一个SoundWave音频资源文件，在ExportMap中只有一个UObject就是音频数据。但这个音频数据需要SoundWave的类对象，所以在ImportMap中有一个UObject储存类对象，这个SoundWave类对象是属于 /Script/UnrealEngine UPackage里的，/Script/UnrealEngine就相当于保存类对象定义的地方，所以ImportMap中总共有两个UObject，一个是Class对象，一个是Package。加载的时候在UPackage中找到类对象）
 
@@ -152,9 +132,9 @@ ExportMap【0】音频数据
 
 }
 
-<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/9.jpg" width="300px" />
+<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/9.jpg" />
 
-<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/10.jpg" width="300px" />
+<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/10.jpg"/>
 
 ClassName：Class表明这是一个Class对象
 
@@ -162,7 +142,7 @@ ObjectName:SoundWave表明这个SoundWave类对象
 
 OuterIndex：-2表明这个类对象是放在索引为1的包内
 
-<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/11.jpg" width="300px" />
+<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/11.jpg" />
 
 索引换算方法：
 
@@ -190,9 +170,9 @@ OuterIndex：-2表明这个类对象是放在索引为1的包内
 
 Import中也利用同样的三个值ObjectName、ClassName、ClassPackage，计算出一个同样的索引，在0-255中对应索引的位置上找到这个导出在ExportMap中的位置
 
-<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/12.jpg" width="300px" />
+<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/12.jpg" />
 
-<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/13.jpg" width="300px" />
+<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/13.jpg" />
 
 总结：
 
@@ -202,7 +182,7 @@ Import中也利用同样的三个值ObjectName、ClassName、ClassPackage，计�
 
 
 
-<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/14.jpg" width="300px" />
+<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/14.jpg" width="600px" />
 
 ​    其实方法上来讲是很相似的，加载UObject（Import加载UClass Export加载UPackage下的UObject）的时候都会先去要求Outer已经被加载，再从Outer中获取UObject。
 
@@ -232,13 +212,13 @@ Import中也利用同样的三个值ObjectName、ClassName、ClassPackage，计�
 
 如果有Outer也就是说不是UPackage 则从outer中找到原型 再从原型中找到对应的component，因为outer->getArchetype最终一定有一个Top-Level Package，这样必定返回一个类的默认对象。
 
-<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/15.jpg" width="300px" />
+<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/15.jpg"  />
 
-<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/16.jpg" width="300px" />
+<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/16.jpg"  />
 
 2、根据Class Outer Name Template构建模板对象
 
-<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/17.jpg" width="300px" />
+<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/17.jpg"  />
 
 在内存中重新构建出来一个UObject
 
@@ -252,7 +232,7 @@ Template 这个Object对应的模板
 
 3、设置Linker
 
-<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/18.jpg" width="300px" />
+<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/18.jpg"  />
 
 设置Export.Object对应的Linker，并添加到ObjLoaded中，在EndLoad中重新拿到ObjLoaded（需要加载的所有Export）随后真正的序列化这个物体。
 
@@ -260,17 +240,17 @@ Template 这个Object对应的模板
 
 **第二步 EndLoad调用PreLoad方法实现序列化**
 
-<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/19.jpg" width="300px" />
+<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/19.jpg"  />
 
 FAA2即FArchive下的Loader对象，与uasset文件直接关联。
 
 Export包含了这个Object导出所存储的必要信息，在文件中的起始偏移值，文件大小。将内容加载至内存随后序列化
 
-<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/20.jpg" width="300px" />
+<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/20.jpg"/>
 
-<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/21.jpg" width="300px" />
+<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/21.jpg"  />
 
-<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/22.jpg" width="300px" />
+<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/22.jpg" />
 
 <https://yuedu.163.com/book_reader/abb2cf428b244522b17aa2ec9eeea88c_4/dfd26a58c22643bf95b8a473352d5b4c_4>
 
@@ -290,38 +270,16 @@ Export包含了这个Object导出所存储的必要信息，在文件中的起�
 
 
 
+## 参考文章：
 
+* UE4 Pak 文件格式  https://zhuanlan.zhihu.com/p/54531649>
 
-**推荐文章：**
+* UE4 文件系统 https://zhuanlan.zhihu.com/p/35925797>
 
-UE4 Pak 文件格式 
+* 大象无形 <https://yuedu.163.com/book_reader/abb2cf428b244522b17aa2ec9eeea88c_4/dfd26a58c22643bf95b8a473352d5b4c_4>
 
-<https://zhuanlan.zhihu.com/p/54531649>
+* UE4对象系统_序列化和uasset文件格式 https://www.jianshu.com/p/9fea500aaa4d>
 
+* UE4 Pak 相关知识总结 https://arcecho.github.io/2017/07/02/UE4-Pak-相关知识总结/
 
-
-UE4 文件系统 
-
-<https://zhuanlan.zhihu.com/p/35925797>
-
-
-
-大象无形 <https://yuedu.163.com/book_reader/abb2cf428b244522b17aa2ec9eeea88c_4/dfd26a58c22643bf95b8a473352d5b4c_4>
-
-
-
-UE4对象系统_序列化和uasset文件格式
-
-<https://www.jianshu.com/p/9fea500aaa4d>
-
-
-
-UE4 Pak 相关知识总结
-
-https://arcecho.github.io/2017/07/02/UE4-Pak-相关知识总结/
-
-
-
-UE4 APK内置资源包加载流程  
-
-<https://blog.csdn.net/jiangdengc/article/details/68064895>
+* UE4 APK内置资源包加载流程  https://blog.csdn.net/jiangdengc/article/details/68064895>
