@@ -1,20 +1,20 @@
-## 一、前言
+## 前言
 
-这是关于资源加载的第一篇内容，主要从StaticLoadObject出发，讨论UE是如何把序列化的数据给加载到内存中的。了解加载过程前必须先了解UPackage、uasset文件格式、FLinkerLoad。了解这三个概念之后会介绍StaticLoadObject所经过的四个重要步骤。
+这是关于资源加载的第一篇内容，主要从StaticLoadObject出发，讨论UE是如何把序列化的数据给加载到内存中的。了解加载过程前必须先了解UPackage、uasset文件格式、FLinkerLoad。了解这三个概念之后会介绍StaticLoadObject加载过程所经过的四个步骤。
 
-## 二、UPackage、uasset、FLinkerLoad
+## UPackage、uasset、FLinkerLoad
 
 一个资源在文件中对应uasset，在内存中对应为UPackage。
 
-#### 1、UPackage
+#### UPackage
 
-把某一个具体资源比作班级（UPackage），班级里有基本字段，比如StudentCount学生数目，也有很多学生（对象），但是这个班级充满了恋爱的味道(对象之间互相引用，还引用了其他班的对象，甚至还有多角恋（引用多个物体）。就像一个SoundCue资源或者Material资源，本身有数据（班里的同学），同时还有引用外部对象（其他班的对象），比如SoundCue引用外部声音文件SoundWave，Material引用贴图文件，
+一个资源在内存中表现为一个UPackage的实例，比如一个SoundCue资源，SoundCue内部可能有很多个蓝图节点，就有一些节点的数据，比如Modulator、Mixer等等，这些数据是实例本身的数据。同时SoundCue也引用外部声音文件SoundWave。SoundWave也是一个资源，也是对应的一个UPackage实例。这样两个UPackage之间就存在依赖关系。
 
-对于班级（UPackage）底下的同学（UObject）来说，UPackage是UObject的Outer。(序列化时非常重要，序列化是存储整个UPackage的信息的包括UObject，所以要取得UObject数据必须先知道Outer的数据)
+UPackage就好比一个班级，底下的数据UObject就好比学生，对于班级（UPackage）底下的同学（UObject）来说，UPackage是UObject的Outer。要知道资源自身数据UObject的内容，必须先知道UPackage才行。
 
-#### 2、uasset文件格式
+#### uasset文件格式
 
-uasset是本地的资源文件，加载到内存后就对应一个UPackage的实例。uasset的文件格式如图
+UPackage序列化到本地之后就是uasset文件。uasset是本地的资源文件，文件格式如图
 
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/1.jpg" width="250px" />
 
@@ -28,23 +28,31 @@ uasset是本地的资源文件，加载到内存后就对应一个UPackage的实
 
 * Export Objects 所有Export Table中对象的实际数据。
 
-可以把ImportTable看做是这个资源所依赖的其他资源的列表，ExportTable就是这个资源本身的列表。Unity导出资源的时候是导出AssetBundle + 依赖表。每个资源所依赖的其他资源都记录在依赖表中 。这里的uasset可以看做是AssetBundle + 依赖表中这个资源的依赖文件记录。其中AssetBundle就是对应的ExportTable以及ExportObject的内容，依赖表中这个资源的依赖文件记录就是对应的ImportTable。
+前文提过，两个UPackage实例是可以存在依赖关系的，序列化到uasset文件的时候，这些依赖关系就存储为ImportTable。可以把ImportTable看做是这个资源所依赖的其他资源的列表，ExportTable就是这个资源本身的列表。Unity导出资源的时候是导出AssetBundle + 依赖表。每个资源所依赖的其他资源都记录在依赖表中 。这里的uasset可以看做是AssetBundle + 依赖表中这个资源的依赖文件记录。其中AssetBundle就是对应的ExportTable以及ExportObject的内容，依赖表中这个资源的依赖文件记录就是对应的ImportTable。
 
-#### 3、FLinkerLoad
+#### FLinkerLoad
 
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/2.jpg" />
 
 
 
-FlinkerLoad是作为uasset和内存UPackage的中间桥梁。在加载内容生成UPackage的时候，UPackage会根据名字找到uasset文件。主要内容如下：
+FLinkerLoad是作为uasset和内存UPackage的中间桥梁。在加载内容生成UPackage的时候，UPackage会根据名字找到uasset文件，由FLinkerLoad来负责加载。FLinkerLoad主要内容如下：
 
-* FArchive* Loader; //Loader负责读取具体文件
+* FArchive* Loader; 
 
-* TArray<FObjectImport> ImportMap; //将uasset的ImportTable加载到ImportMap中，FObjectImport是需要依赖（导入）的UObject
+  //Loader负责读取具体文件
 
-* TArray<FObjectExport> ExportMap; //FObjectExport是这个UPackage所拥有的UObject（这些UObject都能提供给其他UPackage作为Import）
+* TArray<FObjectImport> ImportMap; 
 
-## 三、加载内容的时候主要经过了以下四个步骤：
+  //将uasset的ImportTable加载到ImportMap中，FObjectImport是需要依赖（导入）的UObject
+
+* TArray<FObjectExport> ExportMap; 
+
+  //FObjectExport是这个UPackage所拥有的UObject（这些UObject都能提供给其他UPackage作为Import）
+
+在了解了基本概念后，接下来进入主要部分，也就是StaticLoadObject加载，StaticLoadObject可以分成四个部分。
+
+## 加载内容的四个步骤：
 
 1. 根据文件名字创建一个空的包（没有任何文件相关的数据）
 
@@ -62,79 +70,84 @@ FlinkerLoad是作为uasset和内存UPackage的中间桥梁。在加载内容生�
 
 序列化uasset阶段中会序列化还原这个资源所需要的信息，例如ImportMap、ExportMap，但这两个Map中存储的信息仅仅是Import和Export的信息而已，可以理解为是知道了去加载的途径，但是还没有去加载。随后在VerifyImportInner才会实际上地把Import内容加载进内存，（LoadAllObject + EndLoad）把自身资源的数据加载到内存。
 
-##### 1、建立一个UPackage
+#### 1、建立一个UPackage
 
 从StaticLoadObject方法逐步看即可，略过
 
-##### 2、序列化uasset
+#### 2、序列化uasset
 
 在FLinkerLoad的Tick函数中，会把uasset的信息给加载出来。
 
 `FLinkerLoad::ELinkerStatus FLinkerLoad::Tick( float InTimeLimit, bool bInUseTimeLimit, bool bInUseFullTimeLimit )`
 
-1. 读取文件 CreateLoader  
+* 读取文件 CreateLoader  
 
-2. 序列化FileSummary，SerializePackageFileSummary 
+* 序列化FileSummary，SerializePackageFileSummary 
 
-   FPackageFileSummary 主要存储 比如FolderName基本字段以及uasset其余信息在文件中的偏移信息，比如ExportOffset、ExportCount。
+  FPackageFileSummary 主要存储 比如FolderName基本字段以及uasset其余信息在文件中的偏移信息，比如ExportOffset、ExportCount。
 
-3. 序列化uasset其他信息（除FileSummary、ExportObject）比如：    SerializeImportMap、SerializeExportMap。
+* 序列化uasset其他信息（除FileSummary、ExportObject）比如：    SerializeImportMap、SerializeExportMap。
 
-4. 生成必要信息，这些信息不需要序列化到uasset，可以通过其余序列化信息恢复生成 CreateExportHash
+* 生成必要信息，这些信息不需要序列化到uasset，可以通过其余序列化信息恢复生成 CreateExportHash
 
-5. FinalizeCreation  创建LinkerLoad的最后步骤，verify 加载外部依赖UObject
+* FinalizeCreation  创建LinkerLoad的最后步骤，verify 加载外部依赖UObject
 
-Verify的步骤就已经到了第三个步骤加载ImportMap的内容，在这之前必须先了解ExportMap和ImportMap的概念
+verify加载外部依赖的时候就进入了第三阶段，加载ImportMap的内容。
 
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/4.jpg" width="250px" />
 
 
 
-##### 3、加载ImportMap（依赖的UObject）
+#### 3、加载ImportMap
 
-
+ImportMap是一个FObjectImport的数组，存储依赖的UObject，对应的ExportMap也是FObjectExport的数组。
 
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/5.jpg"/>
 
 
 
-FLinkerLoad::VerifyImportInner主要分为两种情况，Asset实际资产和非Asset（MemoryOnly），这两种情况还要区别是加载UObject还是UPackage。**（UClass和UPackage都是继承自UObject的）**
-
-
+verify主要是调用到FLinkerLoad::VerifyImportInner，这个函数主要分为两种情况，加载的UObject是Asset实际资产和非Asset（MemoryOnly），这两种情况还要区别是加载UObject还是UPackage。就是说加载Asset的时候可能只是加载这个资产底下的一个UObject而已，也可能是加载整个UPackage。加载非Asset的时候也有可能是加载UObject或者UPackage。**（UClass和UPackage都是继承自UObject的）**
 
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/6.jpg"/>
 
-
-
 一、Import是一个MemoryOnly。
 
- 1、Import是MemoryOnlyPackage 加载在LoadPackageInternal （加载AssetPackage，不加载MemoryOnlyPackage）中加载不到，在之后的CreatePackage（优先在内存中找，否则创建）找到对应的包返回即可，Import.XObject = FindPackage。
+ 1、Import是MemoryOnlyPackage 
 
+加载代码里主要用到了这两个函数。
 
+* LoadPackageInternal （主要是加载AssetPackage，不加载MemoryOnlyPackage）
+
+* CreatePackage（优先在内存中找，否则创建）
+
+当在LoadPackageInternal加载不到的时候，会继续在CreatePackage中查找，这个函数优先在内存中查找，而MemoryOnly正是提前存在于内存中的。找到UPackage对应的包返回即可，Import.XObject = FindPackage。
+
+（就目前的理解来看，可能有错，加载的MemoryOnly一般是UClass或者包含UClass的UPackage，像SoundWave也是一个UClass，这些UClass包含在 /Script/UnrealEngine的UPackage中，这些UClass类以及UPackage都是在引擎启动的时候就已经加载到内存中的）
 
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/7.jpg"/>
 
- 2、Import是一个UObject，那必定是Class对象（类似Java Class对象），找到TopLevelPackage，在TopLevelPackage找到这个Class对象。
+ 2、Import是一个UObject，那必定是Class对象（类似Java Class对象），找到TopLevelPackage，也就是这个Class对象所在的UPackage，在TopLevelPackage找到这个Class对象并赋值给Import的XObject。
 
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/8.jpg"/>
 
-（比如加载一个SoundWave音频资源文件，在ExportMap中只有一个UObject就是音频数据。但这个音频数据需要SoundWave的类对象，所以在ImportMap中有一个UObject储存类对象，这个SoundWave类对象是属于 /Script/UnrealEngine UPackage里的，/Script/UnrealEngine就相当于保存类对象定义的地方，所以ImportMap中总共有两个UObject，一个是Class对象，一个是Package。加载的时候在UPackage中找到类对象）
 
-Sound.uasset {
 
-* ImportMap[0] SoundWave Class对象
+比如加载一个SoundWave音频资源文件，在ExportMap中只有一个UObject就是音频数据。但这个音频数据需要SoundWave的类对象，所以在ImportMap中有一个UObject储存类对象，这个SoundWave类对象是属于 /Script/UnrealEngine UPackage里的，/Script/UnrealEngine就相当于保存类对象定义的地方，所以ImportMap中总共有两个UObject，一个是Class对象，一个是Package。加载的时候在UPackage中找到类对象
 
-* ImportMap[1] /Script/UnrealEngine UPackage包
-
-* ExportMap[0] 音频数据
-
+```
+Sound.uasset
+{
+  ImportMap[0] SoundWave Class对象
+  ImportMap[1] /Script/UnrealEngine UPackage包
+  ExportMap[0] 音频数据
 }
+```
 
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/9.jpg" />
 
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/10.jpg"/>
 
-* ClassName：Class表明这是一个Class对象
+* ClassName：Class表明这是一个Class对象、Package表明是一个UPackage
 
 * ObjectName:SoundWave表明这个SoundWave类对象
 
@@ -150,15 +163,13 @@ Sound.uasset {
 
 *  PackageIndex = 0,表示当前UPackage对象；
 
-
+看ExportMap[0]的classIndex为-1，也就是说这个数据的类的数据保存在ImportMap[0]的位置。ImportMap[0]的ClassName为Class表明这是一个类，如果为Package则表明这个Import是一个UPackage。ImportMap[0]是U Package底下的一个UObject，通过ImportMap[0].OuterIndex 可以知道这个UObject的Outer的位置，OuterIndex是-2，也就是说Outer是ImportMap[1]，ImportMap[1]是一个UPackage。
 
 二、Import是一个Asset资源。
 
- 1、Import对应的是一个UPackage，那么会调用LoadPackageInternal，在这个函数里又会根据名字去找到对应的具体文件，然后创建一个新的UPackage。（先假设已经完成加载外部AssetPackage，因为LoadPackage过程是一样）, Import.SourceLinker = NewUPackage.LinkerLoad
+ 1、Import对应的是一个UPackage，那么会调用LoadPackageInternal，在这个函数里又会根据名字去找到对应的具体文件，然后创建一个新的UPackage。这个步骤有点类似于递归。（先假设已经完成加载Import的AssetPackage，因为LoadPackage过程是一样）, 接着让Import.SourceLinker = NewUPackage.LinkerLoad让Import持有NewUPackage的FLinkerLoad。
 
- 2、Import表示一个UObject，UObject必定属于另一个UPackage(必定有Outer)，先去加载对应的Outer。加载完Outer之后，包1中Import.SourceLinker = Outer.SourceLinker。通过HashName找到对应的资源的索引，包1的Import.SourceIndex = 包2的ExportMap中对应资源的索引
-
-
+ 2、Import表示一个UObject，UObject必定属于另一个UPackage(必定有Outer)，先去加载对应的Outer。加载完Outer之后，才加载UObject。一个包对应一个FLinkerLoad，让包1中Import.SourceLinker = 包2的Outer.SourceLinker。同时可以知道，NewUPackage（当作包2）的ExportMap肯定有一个UObject是对应着包1的ImportMap。因为两者存在引用关系。为了加载UObject，通过HashName找到对应的资源的索引，包1的Import.SourceIndex = 包2的ExportMap中对应资源的索引
 
 附：如何寻找正确的SourceIndex 
 
@@ -174,21 +185,23 @@ Import中也利用同样的三个值ObjectName、ClassName、ClassPackage，计�
 
 总结：
 
-​    对于MemoryOnly来说，是在Import.XObject中直接记录UPackage指针 或者 UClass对象指针，Import里有一个SourceLinker表示依赖的资源所需要的FArchive，对于MemoryOnly来说是不需要依赖Asset文件的，所以是这个值是NULL。
+以上就对四种情况分别做了介绍。
 
-​    对于Asset来说，是在Import.SourceLinker中记录资源的Loader，在Import.SourceIndex中记录资源在ExportMap中的位置。这样就可以找到Export.Object
+对于MemoryOnly来说，是在Import.XObject中直接记录UPackage指针 或者 UClass对象指针，Import里有一个SourceLinker表示依赖的资源所需要的FArchive，对于MemoryOnly来说是不需要依赖Asset文件的，所以是这个值是NULL。
+
+对于Asset来说，是在Import.SourceLinker中记录资源的Loader，在Import.SourceIndex中记录资源在ExportMap中的位置。这样就可以找到Export.Object
 
 
 
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/14.jpg" width="600px" />
 
-​    其实方法上来讲是很相似的，加载UObject（Import加载UClass Export加载UPackage下的UObject）的时候都会先去要求Outer已经被加载，再从Outer中获取UObject。
+其实方法上来讲是很相似的，加载UObject（Import加载UClass Export加载UPackage下的UObject）的时候都会先去要求Outer已经被加载，再从Outer中获取UObject。
 
 #### 4、加载ExportMap自身数据
 
 加载ExportMap自身数据的部分可以分成两个主要部分，**一是根据CDO类默认对象生成一个模板，二修改差异性的数据。**
 
-**塑造模板的过程如下：**
+**一、塑造模板的过程如下：*
 
 1. 获得Export.Object的Archetype
 
@@ -232,7 +245,7 @@ Template 这个Object对应的模板
 
 
 
-**EndLoad调用PreLoad方法实现序列化**
+**二、EndLoad调用PreLoad方法实现序列化**
 
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/19.jpg"  />
 
