@@ -24,23 +24,21 @@
 
 ​        项目经理可以解决（完成 ），不可以解决->抛给部门经理去处理->部门经理不能解决再抛给总经理去处理。各人负责各自领域内的责任 。
 
+## UE4文件责任链
 
+在UE4中对文件读取也采用了责任链的设计模式。好处是将负责一类功能的（比如专门负责读取Pak文件）给单独抽取了出来，保持类的单一职责。在这个链上的各个处理器只负责分内的事，如果请求不是自己处理直接抛给下一个就好了。链上的每一个环都继承自IPlatformFile接口。
 
-​        在UE4中对文件读取也采用了责任链的设计模式。责任链的好处是将负责一类功能的（比如专门负责读取Pak文件）给单独抽取了出来，保持类的单一职责。在这个链上的各个处理器只负责分内的事，如果请求不是自己处理直接抛给下一个就好了。
-
-
+<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad2/2.jpg"/>
 
 https://zhuanlan.zhihu.com/p/35925797
 
-​        在FPlatformFileManager 是一个单例的管理器，持有一个TopmostPlayformFile，也就是链的头部位置。每个具体实现的类在初始化的时候都会持有下一个IPlatformFile的引用。这样TopmostPlayformFile处理不了的文件可以一直往下传递，直到被处理或者传递到链的末尾。
-
-​        在上一篇内容中讲到，加载uasset文件的时候调用到了方法
+在加载uasset文件的时候调用到了方法
 
 `Handle = FPlatformFileManager::Get().GetPlatformFile().OpenAsyncRead(InFileName); `
 
+其中FPlatformFileManager 是一个单例的管理器，持有一个TopmostPlayformFile，也就是责任链的头部位置。每个具体实现的类在初始化的时候都会持有下一个IPlatformFile的引用。这样TopmostPlayformFile处理不了的文件可以一直往下传递，直到被处理或者传递到链的末尾。
+
 相关方法如下
-
-
 
 ```c++
 FPlatformFileManager 
@@ -48,13 +46,13 @@ FPlatformFileManager
 /** Currently used platform file. */
 class IPlatformFile* TopmostPlatformFile; //类里的唯一变量
 
-FPlatformFileManager& FPlatformFileManager::Get() 
+FPlatformFileManager& FPlatformFileManager::Get() //单例模式
 {
   static FPlatformFileManager Singleton;
   return Singleton;
 }
 
-IPlatformFile& FPlatformFileManager::GetPlatformFile()
+IPlatformFile& FPlatformFileManager::GetPlatformFile() //获得链顶部的IPlatform处理器
 {
   if (TopmostPlatformFile == NULL)
   {
@@ -64,9 +62,11 @@ IPlatformFile& FPlatformFileManager::GetPlatformFile()
 }
 ```
 
-如何生成责任链：
 
-启动过程
+
+**如何生成责任链：**
+
+以安卓为例，启动过程：
 
 1. 在LaunchAndroid.cpp调用AndroidMain 程序入口
 
@@ -76,14 +76,24 @@ IPlatformFile& FPlatformFileManager::GetPlatformFile()
 
 4. 在LaunchCheckForFileOverride生成读取文件的责任链
 
-
+<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad2/4.jpg"/>
 
 最开始责任链只有一个physical platform file，随后加入读取PakFile的处理器。此时physical platform file为PakFile的LowerLevel，也就是处理器的下一环。
 
-
+<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad2/5.jpg"/>
 
 ConditionallyCreateFileWrapper在获得相应的IPlatformFile之后会调用Initialize初始化方法，CurrentPlatformFile也就成了新生成的IPlatformFile的LowerLevel。
 
 
 
-FPakPlatformFile的结构如下
+**FPakPlatformFile的结构**
+
+生成责任链后，链上的每一环各自负责自己的内容，其中FPakPlatformFile是专门处理Pak的一环。这里对FPakPlatformFile只做简要介绍，下一篇内容会详细讲解Pak格式相关。
+
+<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad2/3.jpg" width="600px"/>
+
+* LowerLevel 链上下一环处理器
+
+* TArray<FPakListEntry> PakFiles存储所有Pak文件
+
+FPakPlatformFile的PakFiles 将几个指定目录下所有pak为后缀的文件挂载到内存中，是挂载而不是加载，加载意味着整个pak文件数据都加载到内存中。而挂载不同，pak是打包了很多uasset、uexp文件的这样一个文件。挂载仅仅只是对这些uasset生成一个目录，加载某一个uasset文件的时候，就可以在这个目录下查找，这个pak是否含有这个uasset文件，如果有，才把pak中对应资源相关的数据给加载到内存。
