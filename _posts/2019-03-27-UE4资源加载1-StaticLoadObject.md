@@ -1,20 +1,20 @@
 ## 前言
 
-​        这是关于资源加载的第一篇内容，主要从StaticLoadObject出发，讨论UE是如何把序列化的数据给加载到内存中的。了解加载过程前必须先了解UPackage、uasset文件格式、FLinkerLoad。
+这是关于资源加载的第一篇内容，主要从StaticLoadObject出发，讨论UE是如何把序列化的数据给加载到内存中的。了解加载过程前必须先了解UPackage、uasset文件格式、FLinkerLoad。了解这三个概念之后会介绍StaticLoadObject所经过的四个重要步骤
 
 ## UPackage、uasset、FLinkerLoad
 
-​        一个资源在文件中对应uasset，在内存中对应为UPackage。
+一个资源在文件中对应uasset，在内存中对应为UPackage。
 
 #### UPackage
 
-​        把某一个具体资源比作班级（UPackage），班级里有基本字段，比如StudentCount学生数目，也有很多学生（对象），但是这个班级充满了恋爱的味道(对象之间互相引用，还引用了其他班的对象，甚至还有多角恋（引用多个物体）。就像一个SoundCue资源或者Material资源，本身有数据（班里的同学），同时还有引用外部对象（其他班的对象），比如SoundCue引用外部声音文件SoundWave，Material引用贴图文件，
+把某一个具体资源比作班级（UPackage），班级里有基本字段，比如StudentCount学生数目，也有很多学生（对象），但是这个班级充满了恋爱的味道(对象之间互相引用，还引用了其他班的对象，甚至还有多角恋（引用多个物体）。就像一个SoundCue资源或者Material资源，本身有数据（班里的同学），同时还有引用外部对象（其他班的对象），比如SoundCue引用外部声音文件SoundWave，Material引用贴图文件，
 
-​        对于班级（UPackage）底下的同学（UObject）来说，UPackage是UObject的Outer。(序列化时非常重要，序列化是存储整个UPackage的信息的包括UObject，所以要取得UObject数据必须先知道Outer的数据)
+对于班级（UPackage）底下的同学（UObject）来说，UPackage是UObject的Outer。(序列化时非常重要，序列化是存储整个UPackage的信息的包括UObject，所以要取得UObject数据必须先知道Outer的数据)
 
-#### uasset
+#### uasset文件格式
 
-​        uasset是本地的资源文件，加载到内存后就对应一个UPackage的实例。uasset的文件格式如图
+uasset是本地的资源文件，加载到内存后就对应一个UPackage的实例。uasset的文件格式如图
 
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/1.jpg" width="250px" />
 
@@ -28,11 +28,11 @@
 
 * Export Objects 所有Export Table中对象的实际数据。
 
-​        可以把ImportTable看做是这个资源所依赖的其他资源的列表，ExportTable就是这个资源本身的列表。Unity导出资源的时候是导出AssetBundle + 依赖表。每个资源所依赖的其他资源都记录在依赖表中 。这里的uasset可以看做是AssetBundle + 依赖表中这个资源的依赖文件记录。其中AssetBundle就是对应的ExportTable以及ExportObject的内容，依赖表中这个资源的依赖文件记录就是对应的ImportTable。
+可以把ImportTable看做是这个资源所依赖的其他资源的列表，ExportTable就是这个资源本身的列表。Unity导出资源的时候是导出AssetBundle + 依赖表。每个资源所依赖的其他资源都记录在依赖表中 。这里的uasset可以看做是AssetBundle + 依赖表中这个资源的依赖文件记录。其中AssetBundle就是对应的ExportTable以及ExportObject的内容，依赖表中这个资源的依赖文件记录就是对应的ImportTable。
 
 #### FLinkerLoad
 
-<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/2.jpg" width="400px" />
+<img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/2.jpg" />
 
 
 
@@ -44,7 +44,7 @@ FlinkerLoad是作为uasset和内存UPackage的中间桥梁。在加载内容生�
 
 * TArray<FObjectExport> ExportMap; //FObjectExport是这个UPackage所拥有的UObject（这些UObject都能提供给其他UPackage作为Import）
 
-**加载内容的时候主要经过了以下四个步骤**：
+## 加载内容的时候主要经过了以下四个步骤：
 
 1. 根据文件名字创建一个空的包（没有任何文件相关的数据）
 
@@ -64,7 +64,7 @@ FlinkerLoad是作为uasset和内存UPackage的中间桥梁。在加载内容生�
 
 ##### 一、建立一个UPackage
 
-​        从StaticLoadObject方法即可推出
+从StaticLoadObject方法逐步看即可，略过
 
 ##### 二、序列化uasset
 
@@ -98,9 +98,7 @@ Verify的步骤就已经到了第三个步骤加载ImportMap的内容，在这�
 
 
 
-FLinkerLoad::VerifyImportInner主要分为两种情况，Asset实际资产和非Asset（MemoryOnly），这两种情况还要区别是加载UObject还是UPackage。
-
-**（UClass和UPackage都是继承自UObject的）**
+FLinkerLoad::VerifyImportInner主要分为两种情况，Asset实际资产和非Asset（MemoryOnly），这两种情况还要区别是加载UObject还是UPackage。**（UClass和UPackage都是继承自UObject的）**
 
 
 
@@ -186,27 +184,25 @@ Import中也利用同样的三个值ObjectName、ClassName、ClassPackage，计�
 
 ​    其实方法上来讲是很相似的，加载UObject（Import加载UClass Export加载UPackage下的UObject）的时候都会先去要求Outer已经被加载，再从Outer中获取UObject。
 
-**三、加载ExportMap自身数据**
+#### 四、加载ExportMap自身数据
 
-生成模板 -> 修改差异性数据
+加载ExportMap自身数据的部分可以分成两个主要部分，一是根据CDO类默认对象生成一个模板，然后修改差异性的数据。
 
-**第一步 createExport相当于是一个塑造模板的过程**
+#### CreateExport相当于是一个塑造模板的过程
 
-1、获得Export.Object的Archetype
+1. 获得Export.Object的Archetype
 
-2、根据Class对象、Outer、Name、Template构建模板对象
+2. 根据Class对象、Outer、Name、Template构建模板对象
 
-3、设置Linker
-
-
-
-1、获得Export.Object的Archetype
-
-  1.1、是UPackage，则取得CDO (Class Default Object），相当于类默认构造函数所构建的一个对象，一个类会在内存中放置一个CDO。
-
-  1.2、不是UPackage，则应该是UPackage下的一个UObject，必须先加载到Outer，从Outer中加载原型。加载Outer的时候会一直追溯到UPackage。最后取得的UObject就相当于是CDO中对应的部分。
+3. 设置Linker
 
 
+
+#### 1、获得Export.Object的Archetype
+
+1. 是UPackage，则取得CDO (Class Default Object），相当于类默认构造函数所构建的一个对象，一个类会在内存中放置一个CDO。
+
+2. 不是UPackage，则应该是UPackage下的一个UObject，必须先加载到Outer，从Outer中加载原型。加载Outer的时候会一直追溯到UPackage。最后取得的UObject就相当于是CDO中对应的部分。
 
 如果是UPackage则返回一个CDO。
 
@@ -216,7 +212,7 @@ Import中也利用同样的三个值ObjectName、ClassName、ClassPackage，计�
 
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/16.jpg"  />
 
-2、根据Class Outer Name Template构建模板对象
+#### 2、根据Class Outer Name Template构建模板对象
 
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/17.jpg"  />
 
@@ -230,7 +226,7 @@ Template 这个Object对应的模板
 
 
 
-3、设置Linker
+#### 3、设置Linker
 
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/18.jpg"  />
 
@@ -238,7 +234,7 @@ Template 这个Object对应的模板
 
 
 
-**第二步 EndLoad调用PreLoad方法实现序列化**
+## EndLoad调用PreLoad方法实现序列化
 
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/19.jpg"  />
 
@@ -260,7 +256,7 @@ Export包含了这个Object导出所存储的必要信息，在文件中的起�
 
 结合LoadAllObject底下的方法CreateExport和EndLoad的PreLoad方法。CreateExport相当于创建一个模板对象，随后PreLoad还原差异数据（preload serializeScriptProperty），delta serialization。
 
-**补充1：**
+#### 补充1：
 
 当资源1依赖于资源2的时候，也就是加载包1的过程中必须加载包2，例如一个SoundCue依赖于一个SoundWave，加载资源2时是根据名字去Pak中搜索对应的uasset。找到对应的uasset之后，包1ImportMap与包2ExportMap中对应的UObject 建立关联需要保证三个值不变ObjectName ClassName ClassPackage。
 
