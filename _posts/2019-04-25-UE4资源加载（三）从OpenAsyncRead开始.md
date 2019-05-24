@@ -1,3 +1,13 @@
+---
+layout:     post
+title:      UE4资源加载（三）从OpenAsyncRead开始
+date:       2019-04-25
+author:     BAJIAObujie
+header-img: img/Heaven's_Feel.jpg
+catalog: true
+
+---
+
 ## 前言
 
 这篇文章主要是要解决一个问题。在文件责任链模式下，调用OpenAsyncRead这个方法后，是怎么具体读取到文件的。
