@@ -16,13 +16,13 @@ catalog: true
 
 一个资源在文件中对应uasset，在内存中对应为UPackage。
 
-#### UPackage
+#### 1、UPackage
 
 一个资源在内存中表现为一个UPackage的实例，比如一个SoundCue资源，SoundCue内部可能有很多个蓝图节点，就有一些节点的数据，比如Modulator、Mixer等等，这些数据是实例本身的数据。同时SoundCue也引用外部声音文件SoundWave。SoundWave也是一个资源，也是对应的一个UPackage实例。这样两个UPackage之间就存在依赖关系。
 
 UPackage就好比一个班级，底下的数据UObject就好比学生，对于班级（UPackage）底下的同学（UObject）来说，UPackage是UObject的Outer。要知道资源自身数据UObject的内容，必须先知道UPackage才行。
 
-#### uasset文件格式
+#### 2、uasset文件格式
 
 UPackage序列化到本地之后就是uasset文件。uasset是本地的资源文件，文件格式如图
 
@@ -40,7 +40,7 @@ UPackage序列化到本地之后就是uasset文件。uasset是本地的资源文
 
 前文提过，两个UPackage实例是可以存在依赖关系的，序列化到uasset文件的时候，这些依赖关系就存储为ImportTable。可以把ImportTable看做是这个资源所依赖的其他资源的列表，ExportTable就是这个资源本身的列表。Unity导出资源的时候是导出AssetBundle + 依赖表。每个资源所依赖的其他资源都记录在依赖表中 。这里的uasset可以看做是AssetBundle + 依赖表中这个资源的依赖文件记录。其中AssetBundle就是对应的ExportTable以及ExportObject的内容，依赖表中这个资源的依赖文件记录就是对应的ImportTable。
 
-#### FLinkerLoad
+#### 3、FLinkerLoad
 
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad1/2.jpg" />
 
