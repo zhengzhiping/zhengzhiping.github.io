@@ -1,3 +1,13 @@
+---
+layout:     post
+title:      UE4资源加载（一）从StaticLoadObject开始
+date:       2019-03-27
+author:     BAJIAObujie
+header-img: img/post-bg-cook.jpg
+catalog: true
+
+---
+
 ## 前言
 
 这是关于资源加载的第一篇内容，主要从StaticLoadObject出发，讨论UE是如何把序列化的数据给加载到内存中的。了解加载过程前必须先了解UPackage、uasset文件格式、FLinkerLoad。了解这三个概念之后会介绍StaticLoadObject加载过程所经过的四个步骤。
