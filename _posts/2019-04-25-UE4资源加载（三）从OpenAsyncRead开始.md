@@ -103,10 +103,6 @@ TMap<FString, FPakDirectory> Index；是一个路径名到FPakDirectory的映射
 
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad3/9.jpg" />
 
-!UE_BUILD_SHIPPING 表明如果不是发行版本那么还可以额外指定文件夹。
-
-
-
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad3/10.jpg" />
 
 UE4将通过硬编码的形式，指定三个文件夹，其中第一个文件夹 ProjectContentDir + "Paks/"是我们打出来的包存放的文件夹。如图。找到所有PAK对应的文件夹后是挂载这些文件夹中的pak文件
@@ -135,13 +131,21 @@ pak的顺序与所在文件目录有关，在ProjectContentDir下的文件优先
 
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad3/14.jpg" />
 
-在找到pak文件后接着就是挂载的过程，挂载可以理解为把pak的包含了哪些内容生成一个目录，并加入到PakFiles中，查找文件的时候，遍历这些PakFiles，根据生成的目录可以快速索引是否这个pak的目录包含查找文件。对之前的FPakPlatformFile的结构图来说也就是构造红线的部分。新生成一个FPakFile，指定优先级顺序，加入到PakFiles中。
+在找到pak文件后接着就是挂载的过程，挂载可以理解为把pak的包含了哪些内容生成一个目录，并加入到PakFiles中，查找文件的时候，遍历这些PakFiles，根据生成的目录可以快速索引是否这个pak文件的目录包含查找文件。对之前的FPakPlatformFile的结构图来说也就是构造红线的部分。新生成一个FPakFile，指定优先级顺序，加入到PakFiles中。
+
+
 
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad3/15.jpg" />
 
 挂载主要也主要分成三步骤：
 
-一、生成FPakFile。
+* 生成FPakFile。
+
+* 如果是补丁文件则提高补丁文件的优先级
+
+* 将FPakFile添加到FPakPlatformFile上，排序。**（指定顺序与补丁包的使用有关，最后再说）**
+
+**生成FPakFile**
 
 加载pak文件信息区以及文件索引区。知道这个pak的相关信息，存储了多少文件等等。对这些文件构建对应的路径-文件名-索引的结构。
 
@@ -165,25 +169,21 @@ pak的顺序与所在文件目录有关，在ProjectContentDir下的文件优先
 
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad3/21.jpg" />
 
-首先是读取到资源文件的名字，然后是根据这个名字构建对应的路径-文件名-索引的关系
+首先是读取到资源文件的名字，接着序列化得到整个Entry。然后是根据这个名字构建对应的文件夹路径-文件名-索引的关系
 
-首先获得这个名字的路径Path，在保存的Index中寻找是否已存在文件夹，如果已存在文件夹则直接把直接把索引和文件名字放入这个文件夹（对应if中的部分）
+获得这个资源名字的文件夹路径Path，在保存的Index中寻找是否已存在文件夹，把索引和文件名字放入这个文件夹。
 
-如果不存在这个文件夹，那么依次构建文件夹，并放入（对应else的部分）
+* FPaths::GetPath(Filename); 获得文件的路径
 
-Ps：
+* FPaths::GetCleanFilename(Filename)  获得文件的名字 包含后缀
 
-FPaths::GetPath(Filename); 获得文件的路径
-
-FPaths::GetCleanFilename(Filename)  获得文件的名字 包含后缀
-
-Filename = 路径 + 名字 = FPaths::GetPath(Filename) + FPaths::GetCleanFilename(Filename)
+* Filename = 路径 + 名字 = FPaths::GetPath(Filename) + FPaths::GetCleanFilename(Filename)
 
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad3/22.jpg" />
 
-构建路径-文件名-索引这种结构是为了方便在寻找一个文件的时候能够利用Hash快速索引至正确位置。这样就正确生成了FPakFile。
+构建文件夹路径-文件名-索引这种结构是为了方便在寻找一个文件的时候能够利用Hash快速索引至正确位置，把传入的名字拆分得到文件夹路径和文件名，这样就可以得到索引，索引对应TArray中的资源的位置，这样就快速索引到了资源。完成以上步骤后就正确生成了FPakFile。
 
-二、如果是补丁文件则提高补丁文件的优先级
+二、如果pak文件是补丁文件则提高补丁文件的优先级
 
 ​       补丁文件的以 _ 数字_P.pak 这种形式结尾，读取到其中的数字，再加上1，和值乘上100加到原先的优先级上。
 
@@ -191,23 +191,17 @@ Filename = 路径 + 名字 = FPaths::GetPath(Filename) + FPaths::GetCleanFilenam
 
 仍然以此图为例，本体包优先级为4，补丁包为 （0+1）*100 + 4。如果后面出新的补丁包，后缀为1、2、3。优先级就是204、304、404。
 
-
-
-
-
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad3/24.jpg" />
 
 三、将FPakFile添加到FPakPlatformFile上，排序。**（指定顺序与补丁包的使用有关，最后再说）**
 
-每挂载上一个PAK文件，就是添加到FPakPlatformFile的数组上，并且按照从大到小顺序排。按照从大到小的顺序与资源加载是有关的。如果在本体包中的一个文件，在日后的更新中删除的时候，那么这个文件也会打到补丁包上，相当于只是记录到补丁包中，这个文件已经被删除了。这样读取的时候，优先读取补丁包，被删除的文件也就不会被读取到。（注：这里不是真正的删除，只是因为读取顺序的关系，读取到补丁包，这样本体包中的文件虽然没有被删除，但是却永远不会被访问到，效果等同于删除）
+每挂载上一个PAK文件，就是添加到FPakPlatformFile的数组上，并且按照从大到小顺序排。按照从大到小的顺序与资源加载是有关的。如果在本体包中的一个文件，在日后的更新中删除的时候，那么这个文件也会打到补丁包上，相当于只是记录到补丁包中，这个文件已经被删除了。这样读取的时候，优先读取补丁包，知道这个文件已经被删除了，就不会继续往低优先级的pak文件中搜索。这样虽然原来的本体包中存在资源文件，但是却不会被访问到，效果上相当于删除了。
 
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad3/25.jpg" />
 
 通过生成FPakFile（读取Pak文件信息区和文件索引区再构建路径-文件名-索引的结构），指定优先级顺序，加入到PakFiles并排序，这样就完成了挂载Mount的过程。
 
 网上有问题探讨Mount挂载和加载到内存的区别，通过以上分析，可以知道Mount其实是只加载部分pak的文件信息到内存，这部分信息是这个pak存储了多少文件，文件在什么位置等等。并没有加载具体的文件信息。只有用到了具体的文件信息才会去读取。
-
-
 
 讲完了以上四点之后，接着就是回到开头的问题了，从文件责任链开始的OpenAsyncRead之后是如何找到正确的文件的。
 
@@ -233,10 +227,8 @@ FindFileInPaiFiles方法如下，找到所有已经挂载的pak，并且从pak�
 
 先通过文件夹路径找到指定文件夹FPakDirectory，接着再通过具体资源名字在FPakDirectory找到具体索引。通过具体索引就可以在TArray存储所有FPakEntry的数组中找到具体索引的资源文件，这样就找到了正确的FPakEntry。
 
+FPakEntry只是记录了这个资源文件在这个Pak中的偏移位置，以及文件大小等。剩下的就是由读取文件的系统去实际的读取这一部分数据。
 
+至此文章的主题部分就结束了，已经明白了是如何找到FPakEntry的。可以接着思考UE4的这种设计结构如何来配合UE4的打包。Unity的策略是，每一个文件一个Bundle，手动管理依赖关系。加载的时候加载依赖文件，这样来加载整个物体。UE4也是可以做到一样的，每一个文件单独打成一个Pak，然后AssetRegistry是可以导出文件的依赖与被依赖关系的。但是结合之前pak结构，这样的操作是非常低效的。如果我们在游戏初始化的时候就挂载所有PAK文件，那么读取的时候逐个遍历这些PAK是比较低效的，相比之下如果只有一个pak，那么Hash的方法时间复杂度是比较小的。手动管理Pak的挂载与释放可以减少挂载的Pak，但也是有些麻烦的，而且也有挂载释放的消耗。应该说Pak中更适合放多个文件的。
 
-至此文章的主题部分就结束了，已经明白了是如何找到FPakEntry的。可以接着思考UE4的这种设计结构如何来配合UE4的打包。Unity的策略是，每一个文件一个Bundle，手动管理依赖关系。加载的时候加载依赖文件，这样来加载整个物体。UE4也是可以做到一样的，每一个文件单独打成一个PAK，然后AssetRegistry是可以导出文件的依赖与被依赖关系的。但是结合之前说的代码，这样的操作是非常低效的。如果我们在游戏初始化的时候就挂载所有PAK文件，那么读取的时候逐个遍历这些PAK是比较低效的。手动管理PAK的挂载与释放可以减少挂载的PAK，但也是有些麻烦的，而且也有挂载释放的消耗。应该说Pak中更适合放多个文件的。因为PAK减少了，文件的读取也可以用hash完成。其实就是遍历和哈希的时间复杂度的比较。
-
-
-
-pak不仅适合放多个文件，UE4在ProjectLauncher里也提供了非常方便的打包工具，接下来将会介绍UE4的打包相关的内容。
+Pak不仅适合放多个文件，UE4在ProjectLauncher里也提供了非常方便的打包工具，接下来将会介绍UE4的打包相关的内容。
