@@ -1,6 +1,6 @@
 ---
 layout:     post
-title:      UE4资源加载（三）从OpenAsyncRead开始
+title:      UE4资源加载（三）FPakPlatformFile相关
 date:       2019-04-25
 author:     BAJIAObujie
 header-img: img/Heaven's_Feel.jpg
@@ -10,17 +10,15 @@ catalog: true
 
 ## 前言
 
-这篇文章主要是要解决一个问题。在文件责任链模式下，调用OpenAsyncRead这个方法后，是怎么具体读取到文件的。
-
-解决这个问题首先可以看看这个方法在FPakPlatformFile中的实现
+这篇文章是继续上一篇文件责任链的内容，继续讲FPakPlatformFile。上一篇文章中提到在文件责任链模式下，调用OpenAsyncRead这个方法后，就可以具体读取到文件，这里将从这个方法为起点，了解FPakPlatformFile的相关内容。首先看看这个方法在FPakPlatformFile中的实现。
 
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad3/1.jpg" />
 
 首先先简单介绍一下概念，FPakPlatformFile是责任链中专门负责处理pak文件的一环处理器。FPakEntry对应具体要读取的uasset文件，FPakFile对应具体的磁盘上的pak文件。FPakPlatformFile持有一个FPakFile的数组，而FPakFile有包含有多个FPakEntry。（pak可以理解为压缩包，压缩包里有至少一个资源文件，这个文件就是对应FPakEntry）
 
-然后从代码可以了解到，在FindFileInPakFiles方法中传入三个参数，一是读取的文件名字，二三是空的FPakEntry和FPakFile。这个方法返回一个bool值表明是否找到对应的文件，FileEntry被赋值为对应的文件。PakFile被赋值为包含这个FileEntry的pak文件。在找到这个具体的文件FileEntry后，返回一个异步读取的句柄。
+然后从代码可以了解到，在FindFileInPakFiles方法中传入三个参数，一是读取的文件名字，二三是FPakEntry和FPakFile指针。这个方法返回一个bool值表明是否找到对应的文件，FileEntry被赋值为对应的文件。PakFile被赋值为包含这个FileEntry的pak文件。在找到这个具体的文件FileEntry后，返回一个异步读取的句柄。
 
-**这个问题不关心是如何异步读取的。关注点是FindFileInPakFiles这个方法。**
+**我们不关心是如何异步读取的。关注点是FindFileInPakFiles这个方法。**
 
 在了解这个方法前必须先了解四点相关内容
 
@@ -183,7 +181,7 @@ pak的顺序与所在文件目录有关，在ProjectContentDir下的文件优先
 
 构建文件夹路径-文件名-索引这种结构是为了方便在寻找一个文件的时候能够利用Hash快速索引至正确位置，把传入的名字拆分得到文件夹路径和文件名，这样就可以得到索引，索引对应TArray中的资源的位置，这样就快速索引到了资源。完成以上步骤后就正确生成了FPakFile。
 
-二、如果pak文件是补丁文件则提高补丁文件的优先级
+**如果是补丁文件则提高补丁文件的优先级**
 
 ​       补丁文件的以 _ 数字_P.pak 这种形式结尾，读取到其中的数字，再加上1，和值乘上100加到原先的优先级上。
 
@@ -193,7 +191,7 @@ pak的顺序与所在文件目录有关，在ProjectContentDir下的文件优先
 
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad3/24.jpg" />
 
-三、将FPakFile添加到FPakPlatformFile上，排序。**（指定顺序与补丁包的使用有关，最后再说）**
+**将FPakFile添加到FPakPlatformFile上，排序。**
 
 每挂载上一个PAK文件，就是添加到FPakPlatformFile的数组上，并且按照从大到小顺序排。按照从大到小的顺序与资源加载是有关的。如果在本体包中的一个文件，在日后的更新中删除的时候，那么这个文件也会打到补丁包上，相当于只是记录到补丁包中，这个文件已经被删除了。这样读取的时候，优先读取补丁包，知道这个文件已经被删除了，就不会继续往低优先级的pak文件中搜索。这样虽然原来的本体包中存在资源文件，但是却不会被访问到，效果上相当于删除了。
 
@@ -202,6 +200,8 @@ pak的顺序与所在文件目录有关，在ProjectContentDir下的文件优先
 通过生成FPakFile（读取Pak文件信息区和文件索引区再构建路径-文件名-索引的结构），指定优先级顺序，加入到PakFiles并排序，这样就完成了挂载Mount的过程。
 
 网上有问题探讨Mount挂载和加载到内存的区别，通过以上分析，可以知道Mount其实是只加载部分pak的文件信息到内存，这部分信息是这个pak存储了多少文件，文件在什么位置等等。并没有加载具体的文件信息。只有用到了具体的文件信息才会去读取。
+
+## FindFileInPakFiles
 
 讲完了以上四点之后，接着就是回到开头的问题了，从文件责任链开始的OpenAsyncRead之后是如何找到正确的文件的。
 
@@ -219,7 +219,7 @@ FindFileInPaiFiles方法如下，找到所有已经挂载的pak，并且从pak�
 
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad3/29.jpg" />
 
-对挂载的每一个PAK做一个遍历操作，每一个PAK都调用Find方法寻找文件
+对挂载的每一个Pak做一个遍历操作，每一个Pak都调用Find方法寻找文件
 
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad3/30.jpg" />
 
@@ -229,6 +229,8 @@ FindFileInPaiFiles方法如下，找到所有已经挂载的pak，并且从pak�
 
 FPakEntry只是记录了这个资源文件在这个Pak中的偏移位置，以及文件大小等。剩下的就是由读取文件的系统去实际的读取这一部分数据。
 
-至此文章的主题部分就结束了，已经明白了是如何找到FPakEntry的。可以接着思考UE4的这种设计结构如何来配合UE4的打包。Unity的策略是，每一个文件一个Bundle，手动管理依赖关系。加载的时候加载依赖文件，这样来加载整个物体。UE4也是可以做到一样的，每一个文件单独打成一个Pak，然后AssetRegistry是可以导出文件的依赖与被依赖关系的。但是结合之前pak结构，这样的操作是非常低效的。如果我们在游戏初始化的时候就挂载所有PAK文件，那么读取的时候逐个遍历这些PAK是比较低效的，相比之下如果只有一个pak，那么Hash的方法时间复杂度是比较小的。手动管理Pak的挂载与释放可以减少挂载的Pak，但也是有些麻烦的，而且也有挂载释放的消耗。应该说Pak中更适合放多个文件的。
+## 补充
 
-Pak不仅适合放多个文件，UE4在ProjectLauncher里也提供了非常方便的打包工具，接下来将会介绍UE4的打包相关的内容。
+至此文章的主题部分就结束了，从OpenAsyncRead方法入手，了解了FPakPlatformFile的代码结构，初始化过程等。也明白了是如何找到FPakEntry的。思考一下，UE4的这种设计结构如何来配合UE4的打包。Unity的策略是，每一个文件一个Bundle，手动管理依赖关系。加载的时候加载依赖文件，这样来加载整个物体。UE4也是可以做到一样的，每一个文件单独打成一个Pak，然后AssetRegistry是可以导出文件的依赖与被依赖关系的。但是结合之前FindFileInPakFiles的代码，如果我们在游戏初始化的时候就挂载所有Pak文件，读取资源的时候逐个遍历这些Pak，这样的效率是不高的。相比之下如果把资源文件打包成一个Pak，那么寻找资源的时候就可以通过Hash的方法快速找到资源。两种方法就是遍历与哈希的时间复杂度的比较。如果坚持一个资源一个Pak的话，那么手动管理Pak的挂载与释放可以减少挂载的Pak，减少遍历的时间，但这相当于必须记录它们之间的依赖引用关系，做法相对来说也是比较麻烦的，而且也有Pak挂载与Pak释放的消耗。所以应该说Pak中更适合放多个文件的。
+
+UE4的Pak可以分为游戏的主体包，与后续的补丁包。而且它在ProjectLauncher里也提供了非常方便的打包工具，接下来将会介绍UE4的打包相关的内容。
