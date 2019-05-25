@@ -1,8 +1,18 @@
-在UAT的打包阶段，有打包成.pak格式的。在ProjectLauncher.log 打包日志中可以看到一句
+## 前言
+
+上一篇文章讲完了从pak中加载出资源文件的过程，那么pak是如何打包生成的呢？pak是分为游戏主体包和后续补丁包两种的，两种又有什么区别呢？这是本篇文章的内容。在UE4打包的时候会启动UAT打包工具，UAT会经历烘焙内容等阶段，最后调用UnrealPak的方法将资源文件打包成pak文件。上一篇文章提到过pak打包与读取是序列化与反序列化的过程，两者是可以互相印证的。本篇文章是pak打包的过程，所以在读代码的时候，不妨与FPakPlatformFile.cpp的内容互相对比。
+
+在4.18版本，Unreal Pak的相关代码是放在UnrealPak.cpp底下的。在4.21版本则是写到了PakFileUtilities.cpp里。文章以4.21版本为准。
+
+
+
+## UnrealPak打包过程
+
+以下主要以打游戏的主体包为例。打包的时候可以在对应的UE的控制台找到UnrealPak的相关日志，文章是用的ProjectLauncher来打包，在ProjectLauncher.log 打包日志中可以看到一句
 
 Running: D:\Program Files\Epic Games\UE_4.21\Engine\Binaries\Win64\UnrealPak.exe D:\MyUnrealProjects\second\second.uproject -batch="D:\Program Files\Epic Games\UE_4.21\Engine\Programs\AutomationTool\Saved\UnrealPak-Commands.txt"
 
-这一句话调用了UnrealPak程序，其中-batch之后的txt文件存储的是本次打包的相关命令
+启动UnrealPak的相关命令就是存储在这个txt中，这一句话调用了UnrealPak程序，其中-batch之后的txt文件存储的是本次打包的相关命令
 
 <img src="https://raw.githubusercontent.com/BAJIAObujie/BAJIAObujie.github.io/master/img/UE4ResourceLoad4/1.jpg"/>
 
@@ -22,29 +32,27 @@ C:\Users\ZL0032\Desktop\UE_Launcher\1\WindowsNoEditor\second\Content\Paks\second
 
 
 
-命令里首先是打包的pak的名字，没有-开头。随后是
+命令里首先是打包完成后pak的存储位置，没有以"-”开头。随后是
 
--create 
+* -create 
 
--cryptokeys 
+* -cryptokeys 
 
--order 
+* -order 
 
--generatepatch（补丁专用，指定了要比较的Release文件）
+* -generatepatch（补丁专用，指定了要比较的Release文件）
 
--tempfiles
+* -tempfiles
 
--patchpaddingalign    
+* -patchpaddingalign    
 
 Patch版本相比Release版本，打包文件的名字多了_0_P结尾，命令也多了一个-generatepatch
 
-
-
--create是获取到一个txt文件，这个txt文件保存了所有烘焙后的文件的地址和保存在pak中的地址
+-create是获取到一个txt文件，这个txt文件保存了所有烘焙后的文件在电脑上的地址和保存在pak中的地址
 
 -order 保存烘焙文件和烘焙文件对应的order顺序
 
--generatepatch这个是表明这次要生成的是补丁文件，其后是Release版本的文件路径，新版本的内容将与先前Release版本的内容逐个资源进行比较，判断新加入、修改、删除的内容打出一个补丁包。
+-generatepatch这个是表明这次要生成的是补丁文件，其后是Release版本的文件路径，补丁包是基于Release包为基础打出的，所以如果本次打包是补丁包，那么必须指明具体的Release版本，在发布Release版本的时候，除了生成对应的pak外，还会在电脑项目工程的Release目录下生成一个以ReleaseVersion为名的文件夹。在打补丁包的时候，此时已经是新版本了，新版本的内容将与先前Release版本的内容逐个资源进行比较，判断新加入、修改、删除的内容，从而打出一个补丁包。
 
 
 
